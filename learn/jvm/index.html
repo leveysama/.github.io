@@ -1,0 +1,179 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8" />
+  
+  <title>一次线上JVM调优 | LearningSpace</title>
+  <meta name="author" content="LeveySama" />
+
+  
+  <meta name="description" content="springcloud dubbo" />
+  
+
+  
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+
+  <meta property="og:title" content="一次线上JVM调优" />
+  <meta property="og:site_name" content="LearningSpace" />
+
+  
+  
+
+  
+    <meta property="og:image" content="" />
+  
+
+  
+  <link href="/css/images/favicon.ico" rel="icon" />
+  
+
+  <link rel="alternate" href="/atom.xml" title="LearningSpace" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+
+
+  <!-- baidu webmaster push -->
+  <script src='//push.zhanzhang.baidu.com/push.js'></script>
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+
+<body>
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">LearningSpace</a></h1>
+  <h2><a href="/">leveysama</a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">Home</a></li>
+    
+      <li><a href="/archives">Archives</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div></header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper"><article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2019-07-29T14:12:16.000Z"><a href="/learn/jvm/">2019-07-29</a></time>
+      
+      
+  
+    <h1 class="title">一次线上JVM调优</h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p>一次临时大流量涌入的时候，线上系统监控发生了报警，观察JVM监控统计发现Old区GC时间过长达到10秒以上。</p>
+<h4 id="我们平台系统有如下特点："><a href="#我们平台系统有如下特点：" class="headerlink" title="我们平台系统有如下特点："></a>我们平台系统有如下特点：</h4><ol>
+<li>每台机器要支持海量连接，超过10w</li>
+<li>qps相当高，新生代迅速增长</li>
+</ol>
+<p>综上特点会导致有大量对象会转移至old区，高峰期old区域增长非常快，但是对象在一段时间内肯定会消亡。</p>
+<p>jvm参数如下</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">-Xms8g -Xmx8g -Xss512k -XX:PermSize&#x3D;256m -XX:MaxPermSize&#x3D;256m -XX:NewSize&#x3D;5g -XX:MaxNewSize&#x3D;5g</span><br><span class="line">-XX:SurvivorRatio&#x3D;8 -XX:MaxDirectMemorySize&#x3D;4g -XX:+UseParNewGC -XX:ParallelGCThreads&#x3D;4</span><br><span class="line">-XX:MaxTenuringThreshold&#x3D;6 -XX:+UseConcMarkSweepGC -XX:+DisableExplicitGC -XX:+UseCMSInitiatingOccupancyOnly</span><br><span class="line">-XX:+ScavengeBeforeFullGC -XX:+UseCMSCompactAtFullCollection -XX:+CMSParallelRemarkEnabled </span><br><span class="line">-XX:CMSInitiatingOccupancyFraction&#x3D;70 -XX:CMSFullGCsBeforeCompaction&#x3D;9</span><br></pre></td></tr></table></figure>
+<p>第一眼看见对象年龄竟然只设置了6，那就意味着eden区进入到old区的速度也太快了，很容易触发old gc，我知道这个系统所使用的对象在一一段时间内一定会消亡，尝试第一次调整：</p>
+<p>将年龄调成最大值15，再调大young区</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">-Xms12g -Xmx12g -Xss512k -XX:PermSize&#x3D;256m -XX:MaxPermSize&#x3D;256m -XX:NewSize&#x3D;10g -XX:MaxNewSize&#x3D;10g </span><br><span class="line">-XX:SurvivorRatio&#x3D;18 -XX:MaxDirectMemorySize&#x3D;2g -XX:+UseParNewGC -XX:ParallelGCThreads&#x3D;4 </span><br><span class="line">-XX:MaxTenuringThreshold&#x3D;15 -XX:+UseConcMarkSweepGC -XX:+DisableExplicitGC -XX:+UseCMSInitiatingOccupancyOnly </span><br><span class="line">-XX:+ScavengeBeforeFullGC -XX:+UseCMSCompactAtFullCollection -XX:+CMSParallelRemarkEnabled </span><br><span class="line">-XX:CMSFullGCsBeforeCompaction&#x3D;15 -XX:CMSInitiatingOccupancyFraction&#x3D;70 -XX:+CMSClassUnloadingEnabled </span><br><span class="line">-XX:SoftRefLRUPolicyMSPerMB&#x3D;0 -XX:-ReduceInitialCardMarks -XX:+CMSPermGenSweepingEnabled </span><br><span class="line">-XX:CMSInitiatingPermOccupancyFraction&#x3D;70</span><br></pre></td></tr></table></figure>
+<p>Old gc频率果然下降了，但是每次清理时长没有明显差别，继续第二次调整：</p>
+<p>鉴于之前cms收集器在old gc上花的时间比较多，尝试换成了serial old看看效果</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-Xms12g -Xmx12g -Xss512k -XX:PermSize&#x3D;256m -XX:MaxPermSize&#x3D;256m -XX:NewSize&#x3D;10g -XX:MaxNewSize&#x3D;10g </span><br><span class="line">-XX:SurvivorRatio&#x3D;18 -XX:MaxDirectMemorySize&#x3D;2g -XX:+UseParNewGC -XX:ParallelGCThreads&#x3D;4 </span><br><span class="line">-XX:MaxTenuringThreshold&#x3D;15</span><br></pre></td></tr></table></figure>
+<p>发现效果确实比较明显，old gc的时间从原来的10000ms+ 缩短到了2000ms以内.</p>
+<p>后来翻阅了jvm资料，学习了一下CMS垃圾收集的原理，它有两个阶段会发生STW，一个是初始化标记（intial mark），一个是重复标记（cms remark)，重复标记的原因是前一阶段是并行的，也就是业务线程和GC线程同时运作，那么在前一阶段的时间内一开始被标记的很多对象的状态可能都已经产生了变化，所以这个时候需要进入安全点停止所有用户线程，再来一次标记再清除。然后特地查看了下GC日志，发现remark时间很长。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[1 CMS-remark: 2202742K(3145728K)] 6959670K(9751808K), 18.1769610 secs] [Times: user&#x3D;71.37 sys&#x3D;0.06, real&#x3D;18.18 secs]</span><br></pre></td></tr></table></figure>
+<p>突然想到我eden区设置的很大，高峰期的时候，一次cms old开始，到remark之间这段时间，用户程序会和gc线程同步执行，到remark的时候，eden区很可能已经有大量对象了同时很多对象的状态已经被改变，那如果remark之前能把eden区域的对象先清理一遍，那么就降低了remark的负担了吧？？？？翻书发现-XX:+CMSScavengeBeforeRemark，这个参数的意思是在remark之前，先进行一次YGC，迫不及待带的加了这个参数验证我的猜想。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">-Xms12g -Xmx12g -Xss512k -XX:PermSize&#x3D;256m -XX:MaxPermSize&#x3D;256m -XX:NewSize&#x3D;10g -XX:MaxNewSize&#x3D;10g </span><br><span class="line">-XX:SurvivorRatio&#x3D;18 -XX:MaxDirectMemorySize&#x3D;2g -XX:+UseParNewGC -XX:ParallelGCThreads&#x3D;4 </span><br><span class="line">-XX:MaxTenuringThreshold&#x3D;15  -XX:+CMSScavengeBeforeRemark -XX:+UseConcMarkSweepGC -XX:+DisableExplicitGC </span><br><span class="line">-XX:+UseCMSInitiatingOccupancyOnly -XX:+ScavengeBeforeFullGC -XX:+UseCMSCompactAtFullCollection </span><br><span class="line">-XX:+CMSParallelRemarkEnabled -XX:CMSFullGCsBeforeCompaction&#x3D;9 -XX:CMSInitiatingOccupancyFraction&#x3D;70</span><br></pre></td></tr></table></figure>
+<p>监控统计发现old gc的时间缩小到了0.14s！可以证实我的猜测是对的，在这样的高并发系统中同时对象又在一定时间会消亡的情况下，在CMS REMARK之前先来一次YGC可以大幅的降低REMARK的负担。</p>
+
+      
+    </div>
+    
+    <footer>
+        <div class="alignright">
+          
+          <a href='javascript:void(0)' class="share-link bdsharebuttonbox" data-cmd="more">分享</a>
+        </div>
+        
+        
+        <!-- partial('post/share') -->
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+
+</div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="search" name="q" results="0" placeholder="Search">
+    <input type="hidden" name="q" value="site:stomachache.vip">
+  </form>
+</div>
+
+  
+
+  
+<div class="widget tag">
+  <h3 class="title">Recent Posts</h3>
+  <ul class="entry">
+    
+      <li>
+        <a href="/learn/jvm/">一次线上JVM调优</a>
+      </li>
+    
+      <li>
+        <a href="/learn/netty01/">Netty入门学习</a>
+      </li>
+    
+      <li>
+        <a href="/learn/nio/">NIO多路复用学习笔记</a>
+      </li>
+    
+  </ul>
+</div>
+
+
+  
+
+  
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  <p>
+  
+  &copy; 2020 LeveySama
+  
+  All rights reserved.</p>
+  <p>Powered by <a href="http://hexo.io/" target="_blank">Hexo</a></p>
+</div>
+<div class="clearfix"></div>
+
+<script>window._bd_share_config={"common":{"bdSnsKey":{},"bdText":"","bdMini":"1","bdMiniList":false,"bdPic":"","bdStyle":"2","bdSize":"16"},"share":{}};with(document)0[(getElementsByTagName('head')[0]||body).appendChild(createElement('script')).src='http://bdimg.share.baidu.com/static/api/js/share.js?v=89860593.js?cdnversion='+~(-new Date()/36e5)];</script></footer>
+  <script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+
+<div id='bg'></div>
+</body>
+</html>
