@@ -12,7 +12,7 @@
     
     
     
-    <title>NIO多路复用学习笔记 | LearningSpace</title>
+    <title>Archives | LearningSpace</title>
     <!-- inject:style -->
     <link href="/css/style.css" rel="stylesheet" type="text/css">
     <!-- endinject -->
@@ -163,60 +163,47 @@
     
     <div class="cube-content">
         <div class="cube-left">
-            <div class="cube-article">
-    <h1 class="title">NIO多路复用学习笔记</h1>
+            <style>
+    @media(max-width: 768px) {
+        body {
+            background-color: #fff!important;
+        }
+    }
+</style>
+<div class="cube-archives">
     
-    <div class="cube-article-header">
-        <div class="cube-article-date">
-            <i class="cube-icon cube-icon-date" aria-hidden="true"></i>
-            <!-- moment.js对象 -->
-            2019-10-28
-        </div>
-        <div class="cube-article-tags">
-    <i class="cube-icon cube-icon-tag" aria-hidden="true"></i>
+        
+        <div class="cube-archive" style="margin-top: 0;">
+            
+                
+                   
+                            <h1 class="title">2019</h1>
+                            <ul class="posts">
+                   
+                            <li class="post">
+                                <a href="/learn/jvm/">一次线上JVM调优</a>
+                            </li>
+                
+            
+                
+                   
+                            <li class="post">
+                                <a href="/learn/netty01/">Netty入门学习</a>
+                            </li>
+                
+            
+                
+                   
+                            <li class="post">
+                                <a href="/learn/nio/">NIO多路复用学习笔记</a>
+                            </li>
+                
+            
+                    </ul>
+                        </div>
+        
     
 </div>
-    </div>
-    
-    <div class="cube-article-content cube-markdown">
-        
-        <h3 id="I-O多路复用技术"><a href="#I-O多路复用技术" class="headerlink" title="I/O多路复用技术"></a>I/O多路复用技术</h3><p>在I/O编程过程中，当需要同时处理多个客户端接入请求时，可以利用多线程或者I/O多路复用技术进行处理。I/O多路复用技术通过把多个I/O的阻塞复用到同一个select的阻塞上，从而使得系统在单线程的情况下可以同时处理多个客户端请求。与传统的多线程/多进程模型相比，I/O多路复用技术的最大优势是系统开销小，系统不需要创建新的额外进程或线程，也不需要维护这些进程和线程的运行，降低了系统的维护工作量，节省了系统资源，I/O多路复用的主要应用场景如下：</p>
-<p>服务器需要同时处理多个处于监听状态或者多个连接状态的套接字；<br>服务器需要同时处理多种网络协议的套接字；<br>目前支持I/O多路复用的系统调用有select、pselect、 poll、epoll，在Linux网络编程过程中，很长一段时间都使用select做轮询和网络事件通知，然而select的一些固有缺陷导致了它的应用受到了很大的限制，最终Linux不得不在新的内核版本中寻找select的替代方案，最终选择了epoll。epoll与select的原理比较类似，为了克服select的缺点，epoll做了很多重大改进，总结如下：</p>
-<p>支持一个进程打开的socket描述符（FD）不受限制（仅受限于操作系统的最大文件句柄数）。<br>I/O效率不会随着FD数量的增加而线性下降。<br>传统select/poll的另一个致命弱点，就是当你拥有一个很大的socket集合时，由于网络延时或者链路空闲，任意时刻只有少部分的socket是“活跃”的，但是select/poll每次调用都会线性扫描全部的集合，导致效率呈线性下降。epoll不存在这个问题，它只会对“活跃”的socket进行操作——这是因为在内核的实现中，epoll是根据每个fd上面的callback函数实现的。那么只有“活跃”的socket才会去主动调用callback函数，其他<br>idle状态的socket则不会。在这点上，epoll实现了一个伪AIO。<br>使用mmap加速内核与用户空间的消息传递。<br>epoll的API更加简单。<br>Java I/O演进之路<br>从JDK1.0到JDK1.3，Java I/O类库都非常原始，很多UNIX网络编程中的概念或者接口在I/O类库中都没有体现，例如Pipe、Channel、Buffer和Selector等。在2002年发布JDK1.4时，NIO以JSR-51的身份正式随JDK发布。它新增了java.nio包，提供了很多进行异步I/O开发的API和类库，主要的类和接口如下：</p>
-<ol>
-<li>进行异步I/O操作的缓冲区ByteBuffer等；</li>
-<li>进行异步I/O操作的管道Pipe；</li>
-<li>进行各种I/O操作的（同步或异步）的Chanel，包括ServerSocketChanel和SocketChanel；</li>
-<li>多种字符集的编码能力和解码能力；</li>
-<li>实现非阻塞I/O操作的多路复用器Selector；</li>
-<li>文件通道FileChanel；</li>
-<li>新的NIO类库的提供，极大的促进了基于Java的异步非阻塞编程的应用和发展，但是，它依然有不完善的地方，特别是对文件系统的处理能力仍显不足，主要问题如下：</li>
-</ol>
-<p>没有统一的文件属性（例如读写权限）；<br>API能力较弱，例如目录的级联创建和递归遍历，往往需要自己实现；<br>底层存储系统的一些高级API无法使用；<br>所有的文件操作都是同步阻塞调用，不支持异步文件读写操作。<br>2011年7月28日，JDK7正式发布。它的一个比较大的亮点就是将原来的NIO类库进行了升级，被称为NIO 2.0。NIO 2.0由JSR-203演进而来，它主要提供了如下三个方面的改进：</p>
-<p>提供能够批量获取文件属性的API，这些API具有平台无关性，不与特定的文件系统相耦合。另外，它还提供了标准文件的SPI，供各个服务提供商扩展实现；<br>提供AIO功能，支持基于文件的异步I/O操作和针对网络套接字的异步操作；<br>完成JSR-51定义的通道功能，包括对配置和多播的数据报的支持等。</p>
-
-    </div>
-</div>
-
-<div class="cube-article-nav">
-    <ul>
-        
-        <li class="prev">
-            <a href="/learn/netty01/">
-                <i class="cube-icon cube-prev" aria-hidden="true"></i>
-                Netty入门学习
-            </a>
-        </li>
-        
-        
-    </ul>
-</div>
-
-
-<!-- TODO 根据theme.comment的内容进行入口选择 -->
-
-
-
         </div>
         <div class="cube-right">
             
